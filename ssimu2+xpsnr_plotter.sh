@@ -1,9 +1,31 @@
 #!/bin/bash
 
-# Constant bitrate
-Q_BEGIN=10
-Q_END=20
-Q_INC=5
+# MIT License
+
+# Copyright (c) 2023 Gianni Rosato
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# ~
+
+# Usage: ./ssimu2+xpsnr_plotter.sh [input.y4m] [output.csv] [x264|x265|svt] [q_begin] [q_end] [q_increment] [preset]
+# Dependencies: FFmpeg, ssimulacra2_rs, bc, ffmpeg_xpsnr (custom binary)
 
 infile="$1"
 extension=${1##*.}
@@ -12,6 +34,12 @@ noextension=${noextension##*/}
 noextension2=${2%.*}
 noextension2=${noextension2##*/}
 algorithm=$3
+
+Q_BEGIN=$4
+Q_END=$5
+Q_INC=$6
+
+preset=$7
 
 PINK="\033[38;5;206m"
 RED="\033[38;5;196m"
@@ -39,18 +67,16 @@ case $algorithm in
 esac
 
 # Check usage
-if [ $# -ne 3 ]; then
+if [ $# -ne 7 ]; then
     echo -e "	${PINK}${BOLD}SSIMULACRA2${RESET} ${GREY}${BLINK}+${RESET} ${PINK}${BOLD}XPSNR${RESET} ${BOLD}Plotter${RESET}"
-    echo -e "	${GREY}Usage:${RESET} ${PINK}./${RESET}compression-plotter.sh [${PINK}input${RESET}] [${PINK}output.csv${RESET}] [${PINK}x264${RESET}|${PINK}x265${RESET}|${PINK}svt${RESET}]"
+    echo -e "	${GREY}Usage:${RESET} ${PINK}./${RESET}ssimu2+xpsnr_plotter.sh [${PINK}input.y4m${RESET}] [${PINK}output.csv${RESET}] [${PINK}x264${RESET}|${PINK}x265${RESET}|${PINK}svt${RESET}] [${PINK}q_begin${RESET}] [${PINK}q_end${RESET}] [${PINK}q_increment${RESET}] [${PINK}preset${RESET}]"
     exit 1
 fi
-
-# Also edit per codec
 
 if [ $algorithm -eq 3 ] ; then
 	exte="ivf"
 	encoding () {
-		u=$( ffmpeg -y -hide_banner -loglevel quiet -i "$infile" -pix_fmt yuv420p10le -strict -2 -f yuv4mpegpipe - | /usr/bin/time -f "%e %S %U" SvtAv1EncApp -i - -b "$outdir/$noextension-$1.$exte" --crf $1 --preset 9 --input-depth 10 --tune 2 --enable-overlays 1 --enable-qm 1 --scd 1 --irefresh-type 2 2>&1)
+		u=$( ffmpeg -y -hide_banner -loglevel quiet -i "$infile" -pix_fmt yuv420p10le -strict -2 -f yuv4mpegpipe - | /usr/bin/time -f "%e %S %U" SvtAv1EncApp -i - -b "$outdir/$noextension-$1.$exte" --crf $1 --preset $preset --input-depth 10 --tune 2 --aq-mode 2 --enable-cdef 0 --enable-qm 1 --qm-min 0 2>&1)
 		echo "$u" >> "$outdir/tail-$1.txt"
 		s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
 		echo "$s"
@@ -59,7 +85,7 @@ if [ $algorithm -eq 3 ] ; then
 elif [ $algorithm -eq 2 ] ; then
 	exte="265"
 	encoding () {
-		u=$( /usr/bin/time -f "%e %S %U" x265 --input "$infile" --output "$outdir/$noextension-$1.$exte" --output-depth 10 --profile main10 --crf $1 --preset veryfast 2>&1)
+		u=$( /usr/bin/time -f "%e %S %U" x265 --input "$infile" --output "$outdir/$noextension-$1.$exte" --output-depth 10 --profile main10 --crf $1 --preset $preset 2>&1)
 		echo "$u" >> "$outdir/tail-$1.txt"
 		s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
 		echo "$s"
@@ -68,7 +94,7 @@ elif [ $algorithm -eq 2 ] ; then
 elif [ $algorithm -eq 1 ] ; then
 	exte="264"
 	encoding () {
-		u=$( /usr/bin/time -f "%e %S %U" x264 --preset faster --crf $1 --open-gop "$infile" -o "$outdir/$noextension-$1.$exte" 2>&1)
+		u=$( /usr/bin/time -f "%e %S %U" x264 --preset $preset --crf $1 --open-gop "$infile" -o "$outdir/$noextension-$1.$exte" 2>&1)
 		echo "$u" >> "$outdir/tail-$1.txt"
 		s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
 		echo "$s"
@@ -94,8 +120,6 @@ get_bitrate () {
 }
 
 do_ssimu2 () {
-    # first arg is source
-    # second arg is cringe
     ssimulacra2_rs video -f 14 "$1" "$2" | grep Mean | tr -dc ".0123456789-"
 }
 
@@ -120,7 +144,7 @@ do_xpsnr () {
 
 mkdir "$outdir"
 
-echo "q bpp xpsnr ssimu2 real sys usr" >> $2
+echo "q bitrate xpsnr ssimu2 real sys usr" >> $2
 
 done=0
 while [[ $done -eq 0 ]] ; do
