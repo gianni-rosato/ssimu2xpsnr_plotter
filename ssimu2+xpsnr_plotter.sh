@@ -137,7 +137,7 @@ get_bitrate () {
 do_ssimu2 () {
 	case $algorithm in
 		vvenc)
-			ffmpeg_vvc -y -hide_banner -loglevel quiet -i foodmarket_vvc.266 -pix_fmt yuv420p10le -strict -2 "$outdir/temp-$infile-vvc.y4m"
+			ffmpeg_vvc -y -hide_banner -loglevel quiet -i "$2" -pix_fmt yuv420p10le -strict -2 "$outdir/temp-$infile-vvc.y4m"
 			ssimulacra2_rs video -f 14 "$1" "$outdir/temp-$infile-vvc.y4m" | grep Mean | tr -dc ".0123456789-"
 			rm -f "$outdir/temp-$infile-vvc.y4m"
 			;;
