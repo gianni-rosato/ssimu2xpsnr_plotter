@@ -1,16 +1,16 @@
 # SSIMULACRA2 + XPSNR Plotter
 
-This script, written in Bash, automates encoding video with x264, x265, or SVT-AV1 at different CRF values and measuring perceptual quality with the two most useful visual fidelity metrics for video: XPSNR and SSIMULACRA2. Results are output to a CSV file.
+This script, written in Bash, automates encoding video with x264, x265, SVT-AV1, or VVenC at different CRF values and measuring perceptual quality with the two most useful visual fidelity metrics for video: XPSNR and SSIMULACRA2. Results are output to a user-specified file.
 
 ## Usage
 
 ```
-./ssimu2+xpsnr_plotter.sh [input.y4m] [output.csv] [x264|x265|svt] [q_begin] [q_end] [q_increment] [preset]
+./ssimu2+xpsnr_plotter.sh [input.y4m] [output.csv] [x264|x265|svt|vvenc] [q_begin] [q_end] [q_increment] [preset]
 ```
 
 - `input.y4m` - Input video file in YUV4MPEG2 (.y4m) format\*
 - `output.csv` - Output CSV file path to write results  
-- `[x264|x265|svt]` - Encoder to use (x264, x265, or SVT-AV1)
+- `[x264|x265|svt|vvenc]` - Encoder to use (x264, x265, or SVT-AV1)
 - `[q_begin]` - Starting CRF value
 - `[q_end]` - Ending CRF value 
 - `[q_increment]` - Increment between CRF values
@@ -38,7 +38,10 @@ The script requires the following dependencies:
 - x264
 - x265
 - SVT-AV1
+- vvencapp
 - ffmpeg_xpsnr (build FFmpeg from source & rename the binary to `ffmpeg_xpsnr`, then copy to `/usr/local/bin` or wherever you'd prefer. [FFmpeg 6.0 XPSNR Plugin](https://github.com/gianni-rosato/xpsnr)).
+- ffmpeg_vvc (build FFmpeg from source & rename the binary to `ffmpeg_vvc`. Look up "VVCEasy").
+- ffprobe_vvc
 
 ## Examples
 

@@ -25,7 +25,7 @@
 # ~
 
 # Usage: ./ssimu2+xpsnr_plotter.sh [input.y4m] [output.csv] [x264|x265|svt] [q_begin] [q_end] [q_increment] [preset]
-# Dependencies: FFmpeg, ssimulacra2_rs, bc, ffmpeg_xpsnr (custom binary)
+# Dependencies: FFmpeg, ssimulacra2_rs, bc, ffmpeg_xpsnr (custom binary), ffmpeg_vvc (custom binary)
 
 infile="$1"
 extension=${1##*.}
@@ -51,86 +51,119 @@ RESET="\033[0m"
 cur_q=$Q_BEGIN
 outdir=$noextension2
 
-case $algorithm in
-	x264)
-		algorithm=1
-		;;
-	x265)
-		algorithm=2
-		;;
-	svt)
-		algorithm=3
-		;;
-	*)
-		algorithm=0
-		;;
-esac
-
 # Check usage
 if [ $# -ne 7 ]; then
     echo -e "	${PINK}${BOLD}SSIMULACRA2${RESET} ${GREY}${BLINK}+${RESET} ${PINK}${BOLD}XPSNR${RESET} ${BOLD}Plotter${RESET}"
-    echo -e "	${GREY}Usage:${RESET} ${PINK}./${RESET}ssimu2+xpsnr_plotter.sh [${PINK}input.y4m${RESET}] [${PINK}output.csv${RESET}] [${PINK}x264${RESET}|${PINK}x265${RESET}|${PINK}svt${RESET}] [${PINK}q_begin${RESET}] [${PINK}q_end${RESET}] [${PINK}q_increment${RESET}] [${PINK}preset${RESET}]"
+    echo -e "	${GREY}Usage:${RESET} ${PINK}./${RESET}ssimu2+xpsnr_plotter.sh [${PINK}input.y4m${RESET}] [${PINK}output.csv${RESET}] [${PINK}x264${RESET}|${PINK}x265${RESET}|${PINK}svt${RESET}|${PINK}vvenc${RESET}] [${PINK}q_begin${RESET}] [${PINK}q_end${RESET}] [${PINK}q_increment${RESET}] [${PINK}preset${RESET}]"
     exit 1
 fi
 
-if [ $algorithm -eq 3 ] ; then
-	exte="ivf"
-	encoding () {
-		u=$( ffmpeg -y -hide_banner -loglevel quiet -i "$infile" -pix_fmt yuv420p10le -strict -2 -f yuv4mpegpipe - | /usr/bin/time -f "%e %S %U" SvtAv1EncApp -i - -b "$outdir/$noextension-$1.$exte" --crf $1 --preset $preset --input-depth 10 --tune 2 --aq-mode 2 --enable-cdef 0 --enable-qm 1 --qm-min 0 2>&1)
-		echo "$u" >> "$outdir/tail-$1.txt"
-		s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
-		echo "$s"
-		rm "$outdir/tail-$1.txt"
-	}
-elif [ $algorithm -eq 2 ] ; then
-	exte="265"
-	encoding () {
-		u=$( /usr/bin/time -f "%e %S %U" x265 --input "$infile" --output "$outdir/$noextension-$1.$exte" --output-depth 10 --profile main10 --crf $1 --preset $preset 2>&1)
-		echo "$u" >> "$outdir/tail-$1.txt"
-		s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
-		echo "$s"
-		rm "$outdir/tail-$1.txt"
-	}
-elif [ $algorithm -eq 1 ] ; then
-	exte="264"
-	encoding () {
-		u=$( /usr/bin/time -f "%e %S %U" x264 --preset $preset --crf $1 --open-gop "$infile" -o "$outdir/$noextension-$1.$exte" 2>&1)
-		echo "$u" >> "$outdir/tail-$1.txt"
-		s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
-		echo "$s"
-		rm "$outdir/tail-$1.txt"
-	}
-elif [ $algorithm -eq 0 ] ; then
-	echo "${RED}Incorrect algorithm argument.${RESET} Specify either ${PINK}x264${RESET}, ${PINK}x265${RESET}, or ${PINK}svt${RESET}."
-	rm $output_file
-fi
+case $algorithm in
+	x264)
+		exte="264"
+		encoding () {
+			u=$( /usr/bin/time -f "%e %S %U" x264 --preset $preset --crf $1 --open-gop "$infile" -o "$outdir/$noextension-$1.$exte" 2>&1)
+			echo "$u" >> "$outdir/tail-$1.txt"
+			s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
+			echo "$s"
+			rm "$outdir/tail-$1.txt"
+		}
+		;;
+	x265)
+		exte="265"
+		encoding () {
+			u=$( /usr/bin/time -f "%e %S %U" x265 --input "$infile" --output "$outdir/$noextension-$1.$exte" --output-depth 10 --profile main10 --crf $1 --preset $preset 2>&1)
+			echo "$u" >> "$outdir/tail-$1.txt"
+			s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
+			echo "$s"
+			rm "$outdir/tail-$1.txt"
+		}
+		;;
+	svt)
+		exte="ivf"
+		encoding () {
+			u=$( ffmpeg -y -hide_banner -loglevel quiet -i "$infile" -pix_fmt yuv420p10le -strict -2 -f yuv4mpegpipe - | /usr/bin/time -f "%e %S %U" SvtAv1EncApp -i - -b "$outdir/$noextension-$1.$exte" --crf $1 --preset $preset --input-depth 10 --tune 2 --aq-mode 2 --enable-cdef 0 --enable-qm 1 --qm-min 0 2>&1)
+			echo "$u" >> "$outdir/tail-$1.txt"
+			s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
+			echo "$s"
+			rm "$outdir/tail-$1.txt"
+		}
+		;;
+	vvenc)
+		exte="266"
+		encoding () {
+			u=$( /usr/bin/time -f "%e %S %U" vvencapp -i "$infile" -c yuv420_10 --stats 0 --preset $preset -q $1 --profile main_10 -o "$outdir/$noextension-$1.$exte" 2>&1)
+			echo "$u" >> "$outdir/tail-$1.txt"
+			s=$( cat "$outdir/tail-$1.txt" | tail -n 1 2>&1)
+			echo "$s"
+			rm "$outdir/tail-$1.txt"
+		}
+		;;
+	*)
+		echo "${RED}Incorrect algorithm argument.${RESET} Specify either ${PINK}x264${RESET}, ${PINK}x265${RESET}, or ${PINK}svt${RESET}."
+		rm $output_file
+		exit 1
+		;;
+esac
 
 get_bitrate () {
-    if [ $algorithm -eq 1 ] ; then
-    	ffmpeg -hide_banner -loglevel quiet -y -i "$1" -c copy -an "$1.mp4"
-    	ffprobe -hide_banner -loglevel quiet -show_format "$1.mp4" | grep bit_rate | tr -dc ".0123456789-"
-    	rm "$1.mp4"
-    elif [ $algorithm -eq 2 ] ; then
-    	ffmpeg -hide_banner -loglevel quiet -y -i "$1" -c copy -an "$1.mp4"
-    	ffprobe -hide_banner -loglevel quiet -show_format "$1.mp4" | grep bit_rate | tr -dc ".0123456789-"
-    	rm "$1.mp4"
-    elif [ $algorithm -eq 3 ] ; then
-        ffprobe -hide_banner -loglevel quiet -show_format "$1" | grep bit_rate | tr -dc ".0123456789-"
-    fi
+	case $algorithm in
+		x264)
+			ffmpeg -hide_banner -loglevel quiet -y -i "$1" -c copy -an "$1.mp4"
+			ffprobe -hide_banner -loglevel quiet -show_format "$1.mp4" | grep bit_rate | tr -dc ".0123456789-"
+			rm "$1.mp4"
+			;;
+		x265)
+			ffmpeg -hide_banner -loglevel quiet -y -i "$1" -c copy -an "$1.mp4"
+    		ffprobe -hide_banner -loglevel quiet -show_format "$1.mp4" | grep bit_rate | tr -dc ".0123456789-"
+    		rm "$1.mp4"
+			;;
+		svt)
+			ffprobe -hide_banner -loglevel quiet -show_format "$1" | grep bit_rate | tr -dc ".0123456789-"
+			;;
+		vvenc)
+			ffmpeg_vvc -hide_banner -loglevel quiet -y -i "$1" -c copy -an "$1.mp4"
+    		ffprobe_vvc -hide_banner -loglevel quiet -show_format "$1.mp4" | grep bit_rate | tr -dc ".0123456789-"
+    		rm "$1.mp4"
+			;;
+		*)
+			echo "${RED}Incorrect algorithm argument.${RESET} Specify either ${PINK}x264${RESET}, ${PINK}x265${RESET}, or ${PINK}svt${RESET}."
+			rm $output_file
+			exit 1
+			;;
+	esac
 }
 
 do_ssimu2 () {
-    ssimulacra2_rs video -f 14 "$1" "$2" | grep Mean | tr -dc ".0123456789-"
+	case $algorithm in
+		vvenc)
+			ffmpeg_vvc -y -hide_banner -loglevel quiet -i foodmarket_vvc.266 -pix_fmt yuv420p10le -strict -2 "$outdir/temp-$infile-vvc.y4m"
+			ssimulacra2_rs video -f 14 "$1" "$outdir/temp-$infile-vvc.y4m" | grep Mean | tr -dc ".0123456789-"
+			rm -f "$outdir/temp-$infile-vvc.y4m"
+			;;
+		*)
+			ssimulacra2_rs video -f 14 "$1" "$2" | grep Mean | tr -dc ".0123456789-"
+			;;
+	esac
 }
 
 do_xpsnr () {
-    if [ $algorithm -eq 1 ] ; then
-	ffmpeg_xpsnr -y -hide_banner -loglevel quiet -i "$1" -i "$2" -lavfi xpsnr=stats_file=$outdir/xpsnr.log -f null -
-    elif [ $algorithm -eq 2 ] ; then
-	ffmpeg_xpsnr -y -hide_banner -loglevel quiet -i "$1" -i "$2" -lavfi xpsnr=stats_file=$outdir/xpsnr.log -f null -
-    elif [ $algorithm -eq 3 ] ; then
-	ffmpeg -y -hide_banner -loglevel quiet -i "$2" -pix_fmt yuv420p10le -strict -2 -f yuv4mpegpipe - | ffmpeg_xpsnr -y -hide_banner -loglevel quiet -i "$1" -i - -lavfi xpsnr=stats_file=$outdir/xpsnr.log -f null - 2>&1
-    fi
+
+	case $algorithm in
+		x264)
+			ffmpeg_xpsnr -y -hide_banner -loglevel quiet -i "$1" -i "$2" -lavfi xpsnr=stats_file=$outdir/xpsnr.log -f null -
+			;;
+		x265)
+			ffmpeg_xpsnr -y -hide_banner -loglevel quiet -i "$1" -i "$2" -lavfi xpsnr=stats_file=$outdir/xpsnr.log -f null -
+			;;
+		svt)
+			ffmpeg -y -hide_banner -loglevel quiet -i "$2" -pix_fmt yuv420p10le -strict -2 -f yuv4mpegpipe - | ffmpeg_xpsnr -y -hide_banner -loglevel quiet -i "$1" -i - -lavfi xpsnr=stats_file=$outdir/xpsnr.log -f null - 2>&1
+			;;
+		vvenc)
+			ffmpeg_vvc -y -hide_banner -loglevel quiet -i "$2" -pix_fmt yuv420p10le -strict -2 -f yuv4mpegpipe - | ffmpeg_xpsnr -y -hide_banner -loglevel quiet -i "$1" -i - -lavfi xpsnr=stats_file=$outdir/xpsnr.log -f null - 2>&1
+			;;
+	esac
+
 	# Extract XPSNR values
 	y_psnr=$(cat "$outdir/xpsnr.log" | tail -n 1 | grep "Y" | awk '{print $6}')
 	u_psnr=$(cat "$outdir/xpsnr.log" | tail -n 1 | grep "U" | awk '{print $8}')  
@@ -159,7 +192,6 @@ while [[ $done -eq 0 ]] ; do
     bitrate=$(get_bitrate "$fname")
     echo -n "$bitrate " >> $2
     echo -n "Got bitrate " && echo -e "${PINK}$bitrate${RESET}"
-    # echo -n "Got bitrate $bitrate"
     
     xpsnr=$(do_xpsnr "$infile" "$fname")
     echo -n "$xpsnr " >> $2
@@ -172,7 +204,6 @@ while [[ $done -eq 0 ]] ; do
     echo "$time" >> $2
     
     if [[ $cur_q -eq $Q_END ]] ; then
-    	# rm *.lwi
         done=1
     fi
     cur_q=$(($cur_q + $Q_INC))
